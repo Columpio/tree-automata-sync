@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "tree-automata-sync", "tree-automata-sync\tree-automata-sync.fsproj", "{AAF147E1-DC85-493F-94E4-6C1C6FA66219}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AAF147E1-DC85-493F-94E4-6C1C6FA66219}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAF147E1-DC85-493F-94E4-6C1C6FA66219}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAF147E1-DC85-493F-94E4-6C1C6FA66219}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAF147E1-DC85-493F-94E4-6C1C6FA66219}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
