@@ -8,7 +8,7 @@ type private IdentGenerator() =
 
     member x.gensymp prefix =
         let prefixStr = prefix.ToString()
-        let prefixStr = Regex.Replace(prefixStr, "[^a-zA-Z]", "")
+        let prefixStr = Regex.Replace(prefixStr, "[^a-zA-Z0-9]", "")
         let prefixStr = if prefixStr = "" then "x" else prefixStr
         let prefixStrLow = prefixStr.ToLower()
         let counter = ref 0
@@ -16,7 +16,7 @@ type private IdentGenerator() =
             symbols.[prefixStrLow] <- counter.Value + 1
         else
             symbols.Add(prefixStrLow, 1)
-        if counter.Value = 0 then prefixStr else $"%s{prefixStr}%d{counter.Value}"
+        if counter.Value = 0 then prefixStr else $"%s{prefixStr}_%d{counter.Value}"
 
 let private idgen = IdentGenerator()
 
