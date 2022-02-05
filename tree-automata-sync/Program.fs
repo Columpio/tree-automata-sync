@@ -19,6 +19,8 @@ module List =
             | x::xs -> f z x (fun y -> kfoldk y xs k)
         kfoldk
 
+    let inline cons x xs = x :: xs
+
     let mapChoose f xs =
         let rec mapChoose xs k =
             match xs with
@@ -62,6 +64,8 @@ module Term =
             | Apply(op, ts) -> Apply(fOpname op, List.map map ts)
         map
 
+    let toLinearString = fold [] List.cons List.cons >> join ""
+
     let mapVars f = map f id
 
     let freeVars = fold Set.empty Set.add (fun _ -> id)
@@ -93,35 +97,27 @@ module TermList =
 
 type pattern = Pattern of term list
 module Pattern =
-    let fromTermList ts =
-//        let ids = TermList.freeVars ts |> Set.toList
-        Pattern(ts)
-
     let freeVars (Pattern pat) = TermList.freeVars pat
 
     let matchPattern (Pattern termsPat) (Pattern termsInst) =
         let rec matchWith ((constrMap, varMap) as maps) (termPat, termInst) k =
             let termPat = Term.substitute constrMap varMap termPat
-            match termPat, termInst with
-            | Apply(fPat, argsPat), Apply(fInst, argsInst) ->
-                let maps = if fPat = fInst then maps else Map.add fPat fInst constrMap, varMap
-                matchListsWith maps (List.zip argsPat argsInst) k
-            | Var idPat, Var idInst ->
-                if idPat = idInst then maps else constrMap, Map.add idPat termInst varMap
-                |> k
-            | _ -> __notImplemented__()
+            match termPat with
+            | Apply(fPat, argsPat) ->
+                match termInst with
+                | Apply(fInst, argsInst) ->
+                    let maps = if fPat = fInst then maps else Map.add fPat fInst constrMap, varMap
+                    matchListsWith maps (List.zip argsPat argsInst) k
+                | Var _ -> None
+            | Var idPat ->
+                match termInst with
+                | Var idInst when idPat = idInst -> k maps
+                | Apply _
+                | Var _ -> k (constrMap, Map.add idPat termInst varMap)
         and matchListsWith maps pairs k = List.kfoldk matchWith maps pairs k
         matchListsWith (Map.empty, Map.empty) (List.zip termsPat termsInst) Some
 
-    let instantiate instantiator (Pattern(pat)) =
-//        let newFreeVars used = function
-//            | Choice1Of2 t ->
-//                let newFree = Term.freeVars t
-//                Set.difference newFree used |> Set.toList, Set.union newFree used
-//            | Choice2Of2 v -> if Set.contains v used then [], used else [v], Set.add v used
-//        let vars = Vars.instantiate instantiator vars |> List.mapFold newFreeVars Set.empty |> fst |> List.concat
-        let pat = TermList.instantiate instantiator pat
-        Pattern(pat)
+    let instantiate instantiator (Pattern(pat)) = Pattern(TermList.instantiate instantiator pat)
 
     let cutHeads (Pattern pat) =
         if TermList.isBottoms pat then None else TermList.cutHeads pat
@@ -200,7 +196,7 @@ module State =
             match Pattern.cutHeads pattern with
             | Some(heads, bodies) ->
                 let bodies = bottomize bodies
-                let states = List.product bodies |> List.map (fun pat -> AutomatonApply(name, Pattern.fromTermList pat))
+                let states = List.product bodies |> List.map (fun pat -> AutomatonApply(name, Pattern pat))
                 let states = List.map unfoldAutomatonApply states
                 DeltaApply(name, heads, states)
             | None -> AutomatonApply(name, pattern)
@@ -211,7 +207,7 @@ module State =
     let abstractAutomatonApplies =
         let nameFromPattern (Pattern pat) =
             pat
-            |> List.map (function Var ident -> ident | Apply("Bot", []) -> "B" | _ -> __notImplemented__())
+            |> List.map Term.toLinearString
             |> join ""
             |> IdentGenerator.gensymp
         let helper ((vars2states, states2vars) as maps) name pat =
@@ -228,9 +224,7 @@ module State =
 module Vars =
     let toString = List.map toString >> join ", "
 
-    let instantiate instantiator vars =
-//        vars |> List.map (fun v -> match Map.tryFind v instantiator with Some t -> Choice1Of2 t | None -> Choice2Of2 v)
-        vars |> List.map (Map.findOrApply SVar instantiator)
+    let instantiate instantiator = List.map (Map.findOrApply SVar instantiator)
 
 module Example =
     let private aname = IdentGenerator.gensymp "a"
@@ -250,12 +244,16 @@ module Example =
     let pattern2b pattern = AutomatonApply("B", pattern |> Pattern.freeVars |> Set.toList |> List.map Var |> Pattern)
 
     module Example1 =
-        let pattern = Pattern.fromTermList [a; N(x, y)]
+        let pattern = Pattern [a; N(x, y)]
         let instantiator = Map.ofList [ aname, cf(c1, c2) ]
 
     module Example2 =
-        let pattern = Pattern.fromTermList [a; N(L, N(x, y))]
+        let pattern = Pattern [a; N(L, N(x, y))]
         let instantiator = Map.ofList [ aname, af(cf(c1, c2), df(d1, d2)) ]
+
+    module Example3 =
+        let pattern = Pattern [a; N(L, N(x, y))]
+        let instantiator = Map.ofList [ aname, af(c1, df(d1, d2)) ]
 
 let printQuery A B =
     printfn "Хотим:"
@@ -322,6 +320,7 @@ let printFinal A B =
     printfn "Тогда инвариант:"
     let inv = Invariant(freeConstrs, Vars.instantiate abstrVarsMap abstrVars)
     printfn $"""%O{B} = {inv}"""
+    printfn ""
     inv
 
 let printInduction B invariantA =
@@ -349,6 +348,9 @@ let printInduction B invariantA =
     sideB, invariantA''
 
 let printInductionSchema leftSide rightSide =
+    printfn "Соединение левой и правой части:"
+    printfn $"{leftSide} =\n\t{rightSide}\n"
+
     let callsLeft = State.collectAutomatonApplies leftSide
     let callsRight = Invariant.collectAutomatonApplies rightSide
     let callsDiff = Set.difference callsRight callsLeft
@@ -369,8 +371,8 @@ let printInductionSchema leftSide rightSide =
 
 [<EntryPoint>]
 let main _ =
-    let pattern = Example.Example1.pattern
-    let instantiator = Example.Example1.instantiator
+    let pattern = Example.Example3.pattern
+    let instantiator = Example.Example3.instantiator
 
     let A = Example.pattern2a pattern
     let B = Example.pattern2b pattern
