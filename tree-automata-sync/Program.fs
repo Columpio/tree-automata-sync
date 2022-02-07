@@ -232,7 +232,7 @@ module Example =
     let private a, x, y = Var aname, var "x", var "y"
     let private c1, c2, d1, d2 = var "cl", var "cr", var "dl", var "dr"
     let private L = Apply(IdentGenerator.gensymp "L", [])
-    let binaryConstructor c (x, y) = Apply(IdentGenerator.gensymp c, [x; y])
+    let binaryConstructor c = let c = IdentGenerator.gensymp c in fun (x, y) -> Apply(c, [x; y])
     let private N = binaryConstructor "N"
     let private af = binaryConstructor "af"
     let private cf = binaryConstructor "cf"
