@@ -2,13 +2,18 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net5.0</TargetFramework>
+        <TargetFramework>net6.0</TargetFramework>
         <RootNamespace>tree_automata_sync</RootNamespace>
         <WarnOn>3390;$(WarnOn)</WarnOn>
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Collections.fs" />
         <Compile Include="IdentGenerator.fs" />
+        <Compile Include="Prelude.fs" />
+        <Compile Include="Term.fs" />
+        <Compile Include="State.fs" />
+        <Compile Include="Invariant.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
