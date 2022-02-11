@@ -6,6 +6,8 @@ open System.Text.RegularExpressions
 type private IdentGenerator() =
     let symbols = Dictionary<string, int>()
 
+    member x.Reset () = symbols.Clear()
+
     member x.gensymp prefix =
         let prefixStr = prefix.ToString()
         let prefixStr = Regex.Replace(prefixStr, "[^a-zA-Z0-9]", "")
@@ -22,3 +24,5 @@ let private idgen = IdentGenerator()
 
 let gensymp prefix = idgen.gensymp prefix
 let gensym () = gensymp "x"
+
+let reset () = idgen.Reset ()

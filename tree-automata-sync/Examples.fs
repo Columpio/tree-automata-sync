@@ -1,6 +1,7 @@
 module test
 open tree_automata_sync
 open NUnit.Framework
+open FsCheck
 open System
 
 let pattern2a pattern = AutomatonApply("A", pattern)
@@ -15,67 +16,67 @@ let linearInstantiator pattern =
     let width = Pattern.maxFunctionArity pattern
     var2depth |> Map.map (fun _ depth -> Term.mkFullTree width (patDepth - depth))
 
-let printQuery pattern vars2vars A B =
+let printQuery aloud pattern vars2vars A B =
     let vars2vars = Map.toList vars2vars
     let origVars = vars2vars |> List.map snd |> Set.ofList |> Set.toList
-    printfn $"""Хотим: L(C) = {{ ({join "," origVars}) | ({pattern}) \in L(A) }}"""
-    printfn $"""Построим: {B} \in Fb <=> {A} \in Fa"""
+    if aloud then printfn $"""Хотим: L(C) = {{ ({join "," origVars}) | ({pattern}) \in L(A) }}"""
+    if aloud then printfn $"""Построим: {B} \in Fb <=> {A} \in Fa"""
     let newVars = match B with AutomatonApply(_, Pattern ts) -> List.map (function Var ident -> ident | _ -> __unreachable__()) ts | _ -> __unreachable__()
-    printfn $"""Так что: L(C) = {{ ({join ", " origVars}) | \exists ({join ", " newVars}) \in L(B), {vars2vars |> List.map (fun (n, o) -> $"{n} = {o}") |> join ", "} }}"""
-    printfn ""
+    if aloud then printfn $"""Так что: L(C) = {{ ({join ", " origVars}) | \exists ({join ", " newVars}) \in L(B), {vars2vars |> List.map (fun (n, o) -> $"{n} = {o}") |> join ", "} }}"""
+    if aloud then printfn ""
 
-let printInstance instantiator A B =
+let printInstance aloud instantiator A B =
     let A' = State.instantiate instantiator A
     let B' = State.instantiate instantiator B
-    printfn "Инстанцируем:"
-    printfn $"""{B'} \in Fb <=>"""
-    printfn $"""  Fa \ni {A'} ="""
+    if aloud then printfn "Инстанцируем:"
+    if aloud then printfn $"""{B'} \in Fb <=>"""
+    if aloud then printfn $"""  Fa \ni {A'} ="""
     let A'' = State.unfoldAutomatonApplyRec A'
-    printfn $"\t {A''}"
-    printfn ""
+    if aloud then printfn $"\t {A''}"
+    if aloud then printfn ""
     A'', B'
 
-let printFinal A B =
-    printfn "Положим:"
+let printFinal aloud A B =
+    if aloud then printfn "Положим:"
     let abstrState, (abstrVarsMap, _) = State.abstractAutomatonApplies A
     let abstrVars = abstrVarsMap |> Map.toList |> List.map fst
     let freeConstrs = State.freeConstructors abstrState
     let freeConstrsStr = freeConstrs |> List.map toString |> join ", "
-    printfn $"""Fb := {{ (({freeConstrsStr}), ({abstrVars |> List.map toString |> join ", "})) |{"\n\t"}{abstrState} \in Fa }}"""
-    printfn ""
-    printfn "Тогда инвариант:"
+    if aloud then printfn $"""Fb := {{ (({freeConstrsStr}), ({abstrVars |> List.map toString |> join ", "})) |{"\n\t"}{abstrState} \in Fa }}"""
+    if aloud then printfn ""
+    if aloud then printfn "Тогда инвариант:"
     let inv = Invariant.fromConstructorsAndStates freeConstrs (List.map (Map.findOrApply SVar abstrVarsMap) abstrVars)
-    printfn $"{B} =\n\t{inv}\n"
+    if aloud then printfn $"{B} =\n\t{inv}\n"
     inv
 
-let printInduction B invariantA =
+let printInduction aloud B invariantA =
     let freeVars = State.freeVars B |> Set.toList
     let width = max (State.maxFunctionArity B) (Invariant.maxFunctionArity invariantA)
     let instantiator=
         freeVars
         |> List.map (fun ident -> ident, Term.mkFullTree width 1)
         |> Map.ofList
-    printfn "Индукционная раскрутка слева:"
+    if aloud then printfn "Индукционная раскрутка слева:"
     let B' = State.instantiate instantiator B
-    printfn $"{B'} ="
+    if aloud then printfn $"{B'} ="
     let B'' = State.unfoldAutomatonApplyOnce B'
-    printfn $"\t{B''} ="
+    if aloud then printfn $"\t{B''} ="
     let sideB = Invariant.rewrite B'' (B, invariantA)
-    printfn $"\t{sideB}"
-    printfn ""
+    if aloud then printfn $"\t{sideB}"
+    if aloud then printfn ""
 
     let invariantA' = Invariant.instantiate instantiator invariantA
     let invariantA'' = Invariant.unfoldAutomatonApplyRec invariantA'
-    printfn "Индукционная раскрутка справа:"
-    printfn $"{invariantA'} ="
-    printfn $"\t{invariantA''}"
-    printfn ""
+    if aloud then printfn "Индукционная раскрутка справа:"
+    if aloud then printfn $"{invariantA'} ="
+    if aloud then printfn $"\t{invariantA''}"
+    if aloud then printfn ""
 
     sideB, invariantA''
 
-let printInductionSchema leftSide rightSide =
-    printfn "Соединение левой и правой части:"
-    printfn $"{leftSide} =\n\t{rightSide}\n"
+let printInductionSchema aloud leftSide rightSide =
+    if aloud then printfn "Соединение левой и правой части:"
+    if aloud then printfn $"{leftSide} =\n\t{rightSide}\n"
 
     let callsLeft = State.collectAutomatonApplies leftSide
     let callsRight = Invariant.collectAutomatonApplies rightSide
@@ -89,28 +90,31 @@ let printInductionSchema leftSide rightSide =
                 | Some ident -> SVar ident
                 | None -> a
             Invariant.mapAutomatonApplies mapper rightSide
-        printfn "Итоговая индукционная схема:"
-        printfn $"{abstrLeftSide} =\n\t{abstrRightSide}"
+        if aloud then printfn "Итоговая индукционная схема:"
+        if aloud then printfn $"{abstrLeftSide} =\n\t{abstrRightSide}"
         true
     else
-        printfn "Что из правой части не хватает в левой:"
-        callsDiff |> Set.toList |> List.map toString |> join ", " |> sprintf "Количество: %d, Состояния: %s." (Set.count callsDiff) |> printfn "%s"
+        if aloud then printfn "Что из правой части не хватает в левой:"
+        if aloud then printfn $"""Количество: {Set.count callsDiff}, Состояния: {callsDiff |> Seq.map toString |> join ", "}."""
         false
 
-let testPattern pattern =
+let testPattern aloud pattern =
     let pattern = Pattern pattern
-    Console.OutputEncoding <- System.Text.Encoding.UTF8
+    if aloud then Console.OutputEncoding <- System.Text.Encoding.UTF8
 
     let generalizedPattern, vars2vars = Pattern.generalizeVariables pattern
     let instantiator = linearInstantiator generalizedPattern
     let A = pattern2a generalizedPattern
     let B = pattern2b generalizedPattern
-    printQuery pattern vars2vars A B
-    let A, B = printInstance instantiator A B
-    let invariantA = printFinal A B
-    let leftSide, rightSide = printInduction B invariantA
-    let ok = printInductionSchema leftSide rightSide
-    ok
+    printQuery aloud pattern vars2vars A B
+    let A, B = printInstance aloud instantiator A B
+    let invariantA = printFinal aloud A B
+    let leftSide, rightSide = printInduction aloud B invariantA
+    let ok = printInductionSchema aloud leftSide rightSide
+    Assert.IsTrue(ok)
+
+let testSilent = testPattern false
+let testAloud = testPattern true
 
 let var n = Var (IdentGenerator.gensymp n)
 let a, x, y = var "a", var "x", var "y"
@@ -120,34 +124,98 @@ let N = binaryConstructor "N"
 let unaryConstructor c = let c = IdentGenerator.gensymp c in fun x -> Apply(c, [x])
 let S = unaryConstructor "S"
 
+[<SetUp>]
+let initTest () =
+    IdentGenerator.reset ()
+
 [<Test>]
 let Test1 () =
-    Assert.IsTrue(testPattern [a; N(x, y)])
+    testAloud [a; N(x, y)]
 
 [<Test>]
 let Test2 () =
-    Assert.IsTrue(testPattern [a; N(L, N(x, y))])
+    testAloud [a; N(L, N(x, y))]
 
 [<Test>]
 let Test3 () =
-    Assert.IsTrue(testPattern [x; N(x, x)])
+    testAloud [x; N(x, x)]
 
 [<Test>]
 let Test4 () =
-    Assert.IsTrue(testPattern [a; S(x)])
+    testAloud [a; S(x)]
 
 [<Test>]
 let Test5 () =
-    Assert.IsTrue(testPattern [a; S(S(x))])
+    testAloud [a; S(S(x))]
 
 [<Test>]
 let Test6 () =
-    Assert.IsTrue(testPattern [a; N(L, x)])
+    testAloud [a; N(L, x)]
 
 [<Test>]
 let Test7 () =
-    Assert.IsTrue(testPattern [a; N(x, N(y, L))])
+    testAloud [a; N(x, N(y, L))]
 
 [<Test>]
 let Test8 () =
-    Assert.IsTrue(testPattern [a; N(x, N(x, x))])
+    testAloud [a; N(x, N(x, x))]
+
+type patternSetup = {termWidth: int; termHeight: int; varNumber: int; constrNumber: int; termsInPattern: int}
+type testSetup = {patternSetup: patternSetup; runTimes: int}
+
+let generatePattern (setup : patternSetup) =
+    let vars = List.init setup.varNumber (fun _ -> IdentGenerator.gensym ())
+    let constrs = List.init setup.constrNumber (fun _ -> IdentGenerator.gensym ())
+    let maxHeight = setup.termHeight
+    let rec generateTerm height =
+        let genVar =
+            gen {
+                let! ident = Gen.elements vars
+                return Var ident
+            }
+        let genApply =
+            gen {
+                let! args = Gen.listOfLength setup.termWidth (generateTerm (height + 1))
+                let! op = Gen.elements constrs
+                return Apply(op, args)
+            }
+        if height >= maxHeight then genVar
+        else
+            Gen.frequency [
+                height + 1, genVar
+                maxHeight - height, genApply
+            ]
+    Gen.listOfLength setup.termsInPattern (generateTerm 0)
+
+let generateAndRunTest (setup : testSetup) =
+    let generator = generatePattern setup.patternSetup
+    let size = Int32.MaxValue
+    for pattern in Gen.sample size setup.runTimes generator do
+        printfn $"{Pattern pattern}"
+        testSilent pattern
+        initTest ()
+
+[<Test>]
+let SmallBinaryRun1 () =
+    let setup = {patternSetup = {termWidth = 2; termHeight = 1; varNumber = 2; constrNumber = 3; termsInPattern = 3}; runTimes = 30}
+    generateAndRunTest setup
+
+[<Test>]
+let SmallBinaryRun2 () =
+    let setup = {patternSetup = {termWidth = 2; termHeight = 2; varNumber = 4; constrNumber = 3; termsInPattern = 3}; runTimes = 30}
+    generateAndRunTest setup
+
+[<Test>]
+let SmallBinaryRun3 () =
+    let setup = {patternSetup = {termWidth = 2; termHeight = 2; varNumber = 10; constrNumber = 10; termsInPattern = 3}; runTimes = 30}
+    generateAndRunTest setup
+
+[<Test>]
+let SmallTrinaryRun1 () =
+    let setup = {patternSetup = {termWidth = 3; termHeight = 1; varNumber = 10; constrNumber = 10; termsInPattern = 2}; runTimes = 30}
+    generateAndRunTest setup
+
+[<Test>]
+let SmallTrinaryRun2 () =
+    let setup = {patternSetup = {termWidth = 3; termHeight = 1; varNumber = 10; constrNumber = 10; termsInPattern = 3}; runTimes = 30}
+    generateAndRunTest setup
