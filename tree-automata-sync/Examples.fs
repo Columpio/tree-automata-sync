@@ -217,11 +217,17 @@ let TestMultiplePatternsSchemaCover () =
         [x; y]
     ]
     let g = DeltaGenerator(false, patterns, 2)
-    while g.StrategyBuilder.IsReducible() do
-        if g.Check() then
+    let mutable ok = true
+    while ok do
+        if not <| g.Check() then
+            printfn ": stays"
+            g.StrategyBuilder.BacktrackStrategy()
+        else printfn ""
+        if g.StrategyBuilder.IsReducible() then
             g.StrategyBuilder.ImproveCurrentStrategy()
         else
-            g.StrategyBuilder.BacktrackStrategy()
+            ok <- false
+    IdentGenerator.reset()
     Assert.IsTrue(g.CheckAloud())
 
 type patternSetup = {termWidth: int; termHeight: int; varNumber: int; constrNumber: int; termsInPattern: int}

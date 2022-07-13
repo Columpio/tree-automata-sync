@@ -114,6 +114,7 @@ module Pattern =
                 | Some _ -> None
                 | None -> k (constrMap, Map.add idPat termInst varMap)
         and matchListsWith maps pairs k = List.kfoldk matchWith maps pairs k
+        if List.length termsPat <> List.length termsInst then None else
         matchListsWith (Map.empty, Map.empty) (List.zip termsPat termsInst) Some
 
     let instantiate instantiator (Pattern pat) = Pattern(TermList.instantiate instantiator pat)
