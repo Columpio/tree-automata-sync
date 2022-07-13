@@ -11,7 +11,7 @@ let instantiate instantiator = mapEachState (State.instantiate instantiator)
 
 let mapAutomatonApplies f = mapEachState (State.mapAutomatonApplies f)
 
-let unfoldAutomatonApplyRec = mapEachState State.unfoldAutomatonApplyRec
+let unfoldAutomatonApplyRec strategy = mapEachState (State.unfoldAutomatonApplyRec strategy)
 
 let private matchAutomatonApplyStates statePattern stateInstance =
     match statePattern, stateInstance with

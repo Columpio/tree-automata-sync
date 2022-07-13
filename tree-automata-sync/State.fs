@@ -42,7 +42,7 @@ let freeConstructors =
 let instantiate instantiator = mapAutomatonApplies (fun name pat -> AutomatonApply(name, Pattern.instantiate instantiator pat))
 let rewrite substConstrs instantiator = mapAutomatonApplies (fun name pat -> AutomatonApply(name, Pattern.rewrite substConstrs instantiator pat))
 
-let private unfoldAutomatonApplyGeneric mapChild =
+let unfoldAutomatonApplyGeneric strategy mapChild =
     let bottomize tss =
         let N = List.map List.length tss |> List.max
         let padWithBottoms ts =
@@ -55,14 +55,16 @@ let private unfoldAutomatonApplyGeneric mapChild =
         match Pattern.cutHeads pattern with
         | Some(heads, bodies) ->
             let bodies = bottomize bodies
-            let states = List.pairwiseProduct bodies |> List.map (fun pat -> AutomatonApply(name, Pattern pat))
+            let states = strategy bodies |> List.map (fun pat -> AutomatonApply(name, Pattern pat))
             let states = List.map mapChild states
             DeltaApply(name, heads, states)
         | None -> AutomatonApply(name, pattern)
     mapAutomatonApplies unfoldAutomatonApply
 
-let unfoldAutomatonApplyOnce = unfoldAutomatonApplyGeneric id
-let rec unfoldAutomatonApplyRec state = unfoldAutomatonApplyGeneric unfoldAutomatonApplyRec state
+let unfoldAutomatonApplyOnce strategy = unfoldAutomatonApplyGeneric strategy id
+let unfoldAutomatonApplyRec strategy =
+    let rec iter state = unfoldAutomatonApplyGeneric strategy iter state
+    iter
 
 let freeVars = foldAutomatonApplies (fun free _ -> Pattern.freeVars >> Set.union free) Set.empty
 

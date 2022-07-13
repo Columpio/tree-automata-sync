@@ -1,11 +1,5 @@
 ﻿[<AutoOpen>]
 module tree_automata_sync.Prelude
-open System
-
-let inline __notImplemented__() = failwith "Not implemented!"
-let inline __unreachable__() = failwith "Unreachable!"
-let inline toString x = x.ToString()
-let inline join (s : string) (ss : string seq) = String.Join(s, ss)
 
 type opname = string
 type ident = string

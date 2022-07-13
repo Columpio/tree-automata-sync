@@ -4,125 +4,163 @@ open NUnit.Framework
 open FsCheck
 open System
 
-let pattern2a pattern = AutomatonApply("A", pattern)
-let pattern2b pattern =
-    let pattern' = pattern |> Pattern.freeVars |> Set.toList |> List.map Var                                                 // each variable one time
-//    let pattern' = pattern |> Pattern.freeVarsMap |> Map.toList |> List.collect (fun (v, n) -> List.init n (fun _ -> Var v)) // each variable n times
-    AutomatonApply("B", Pattern pattern')
+type DeltaGenerator(aloud, patterns, constructor_max_width) =
+    let mutable aloud = aloud
 
-let linearInstantiator pattern =
-    let var2depth = Pattern.collectVariableDepths pattern
-    let patDepth = Pattern.depth pattern
-    let width = Pattern.maxFunctionArity pattern
-    var2depth |> Map.map (fun _ depth -> Term.mkFullTree width (patDepth - depth))
+    let setAloud b =
+        aloud <- b
+        if aloud then Console.OutputEncoding <- System.Text.Encoding.UTF8
+    let chooseGoodWidth =
+        if constructor_max_width <= 0 then id else fun widthNew ->
+        Assert.LessOrEqual(widthNew, constructor_max_width, $"Induction width {constructor_max_width} is less than constructor arity {widthNew}")
+        constructor_max_width
 
-let printQuery aloud pattern vars2vars A B =
-    let vars2vars = Map.toList vars2vars
-    let origVars = vars2vars |> List.map snd |> Set.ofList |> Set.toList
-    if aloud then printfn $"""Хотим: L(C) = {{ ({join "," origVars}) | ({pattern}) \in L(A) }}"""
-    if aloud then printfn $"""Построим: {B} \in Fb <=> {A} \in Fa"""
-    let newVars = match B with AutomatonApply(_, Pattern ts) -> List.map (function Var ident -> ident | _ -> __unreachable__()) ts | _ -> __unreachable__()
-    if aloud then printfn $"""Так что: L(C) = {{ ({join ", " origVars}) | \exists ({join ", " newVars}) \in L(B), {vars2vars |> List.map (fun (n, o) -> $"{n} = {o}") |> join ", "} }}"""
-    if aloud then printfn ""
+    let linearInstantiator pattern =
+        let var2depth = Pattern.collectVariableDepths pattern
+        let patDepth = Pattern.depth pattern
+        let width = chooseGoodWidth (Pattern.maxFunctionArity pattern)
+        width, var2depth |> Map.map (fun _ depth -> Term.mkFullTree width (patDepth - depth))
 
-let printInstance aloud instantiator A B =
-    let A' = State.instantiate instantiator A
-    let B' = State.instantiate instantiator B
-    if aloud then printfn "Инстанцируем:"
-    if aloud then printfn $"""{B'} \in Fb <=>"""
-    if aloud then printfn $"""  Fa \ni {A'} ="""
-    let A'' = State.unfoldAutomatonApplyRec A'
-    if aloud then printfn $"\t {A''}"
-    if aloud then printfn ""
-    A'', B'
+    do setAloud aloud
+    let width, strategyBuilder, initialMetadata =
+        let patterns = List.map Pattern patterns
+        let widthsAndCounts, initialMetadata =
+            patterns |> List.map (fun pattern ->
+                let generalizedPattern, vars2vars = Pattern.generalizeVariables pattern
+                let variablesCount = Map.keys vars2vars |> Seq.length
+                let width, instantiator = linearInstantiator generalizedPattern
+                (width, variablesCount), (pattern, generalizedPattern, vars2vars, instantiator)) |> List.unzip
 
-let printFinal aloud A B =
-    if aloud then printfn "Положим:"
-    let abstrState, (abstrVarsMap, _) = State.abstractAutomatonApplies A
-    let abstrVars = abstrVarsMap |> Map.toList |> List.map fst
-    let freeConstrs = State.freeConstructors abstrState
-    let freeConstrsStr = freeConstrs |> List.map toString |> join ", "
-    if aloud then printfn $"""Fb := {{ (({freeConstrsStr}), ({abstrVars |> List.map toString |> join ", "})) |{"\n\t"}{abstrState} \in Fa }}"""
-    if aloud then printfn ""
-    if aloud then printfn "Тогда инвариант:"
-    let inv = Invariant.fromConstructorsAndStates freeConstrs (List.map (Map.findOrApply SVar abstrVarsMap) abstrVars)
-    if aloud then printfn $"{B} =\n\t{inv}\n"
-    inv
+        let width = fst <| List.maxBy fst widthsAndCounts
+        let variablesCount = snd <| List.maxBy snd widthsAndCounts
 
-let printInduction aloud B invariantA =
-    let freeVars = State.freeVars B |> Set.toList
-    let width = max (State.maxFunctionArity B) (Invariant.maxFunctionArity invariantA)
-    let instantiator=
-        freeVars
-        |> List.map (fun ident -> ident, Term.mkFullTree width 1)
-        |> Map.ofList
-    if aloud then printfn "Индукционная раскрутка слева:"
-    let B' = State.instantiate instantiator B
-    if aloud then printfn $"{B'} ="
-    let B'' = State.unfoldAutomatonApplyOnce B'
-    if aloud then printfn $"\t{B''} ="
-    let sideB = Invariant.rewrite B'' (B, invariantA)
-    if aloud then printfn $"\t{sideB}"
-    if aloud then printfn ""
+        width, StrategyBuilder.StrategyBuilder(width, variablesCount), initialMetadata
 
-    let invariantA' = Invariant.instantiate instantiator invariantA
-    let invariantA'' = Invariant.unfoldAutomatonApplyRec invariantA'
-    if aloud then printfn "Индукционная раскрутка справа:"
-    if aloud then printfn $"{invariantA'} ="
-    if aloud then printfn $"\t{invariantA''}"
-    if aloud then printfn ""
+    let pattern2a pattern = AutomatonApply("A", pattern)
+    let pattern2b pattern =
+        let pattern' = pattern |> Pattern.freeVars |> Set.toList |> List.map Var                                                 // each variable one time
+    //    let pattern' = pattern |> Pattern.freeVarsMap |> Map.toList |> List.collect (fun (v, n) -> List.init n (fun _ -> Var v)) // each variable n times
+        AutomatonApply("B", Pattern pattern')
 
-    sideB, invariantA''
+    let printQuery pattern vars2vars A B =
+        let vars2vars = Map.toList vars2vars
+        let origVars = vars2vars |> List.map snd |> Set.ofList |> Set.toList
+        if aloud then printfn $"""Хотим: L(C) = {{ ({join "," origVars}) | ({pattern}) \in L(A) }}"""
+        if aloud then printfn $"""Построим: {B} \in Fb <=> {A} \in Fa"""
+        let newVars = match B with AutomatonApply(_, Pattern ts) -> List.map (function Var ident -> ident | _ -> __unreachable__()) ts | _ -> __unreachable__()
+        if aloud then printfn $"""Так что: L(C) = {{ ({join ", " origVars}) | \exists ({join ", " newVars}) \in L(B), {vars2vars |> List.map (fun (n, o) -> $"{n} = {o}") |> join ", "} }}"""
+        if aloud then printfn ""
 
-let printInductionSchema aloud leftSide rightSide =
-    if aloud then printfn "Соединение левой и правой части:"
-    if aloud then printfn $"{leftSide} =\n\t{rightSide}\n"
+    let printInstance strategy instantiator A B =
+        let A' = State.instantiate instantiator A
+        let B' = State.instantiate instantiator B
+        if aloud then printfn "Инстанцируем:"
+        if aloud then printfn $"""{B'} \in Fb <=>"""
+        if aloud then printfn $"""  Fa \ni {A'} ="""
+        let A'' = State.unfoldAutomatonApplyRec strategy A'
+        if aloud then printfn $"\t {A''}"
+        if aloud then printfn ""
+        A'', B'
 
-    let callsLeft = State.collectAutomatonApplies leftSide
-    let callsRight = Invariant.collectAutomatonApplies rightSide
-    let callsDiff = Set.difference callsRight callsLeft
-    if Set.isEmpty callsDiff then
-        let abstrLeftSide, (_, state2vars) = State.abstractAutomatonApplies leftSide
-        let abstrRightSide =
-            let mapper name pat =
-                let a = AutomatonApply(name, pat)
-                match Map.tryFind a state2vars with
-                | Some ident -> SVar ident
-                | None -> a
-            Invariant.mapAutomatonApplies mapper rightSide
-        if aloud then printfn "Итоговая индукционная схема:"
-        if aloud then printfn $"{abstrLeftSide} =\n\t{abstrRightSide}"
-        true
-    else
-        if aloud then printfn "Что из правой части не хватает в левой:"
-        if aloud then printfn $"""Количество: {Set.count callsDiff}, Состояния: {callsDiff |> Seq.map toString |> join ", "}."""
-        false
+    let printFinal A B =
+        if aloud then printfn "Положим:"
+        let abstrState, (abstrVarsMap, _) = State.abstractAutomatonApplies A
+        let abstrVars = abstrVarsMap |> Map.toList |> List.map fst
+        let freeConstrs = State.freeConstructors abstrState
+        let freeConstrsStr = freeConstrs |> List.map toString |> join ", "
+        if aloud then printfn $"""Fb := {{ (({freeConstrsStr}), ({abstrVars |> List.map toString |> join ", "})) |{"\n\t"}{abstrState} \in Fa }}"""
+        if aloud then printfn ""
+        if aloud then printfn "Тогда инвариант:"
+        let inv = Invariant.fromConstructorsAndStates freeConstrs (List.map (Map.findOrApply SVar abstrVarsMap) abstrVars)
+        if aloud then printfn $"{B} =\n\t{inv}\n"
+        inv
 
-let testPattern aloud pattern =
-    let pattern = Pattern pattern
-    if aloud then Console.OutputEncoding <- System.Text.Encoding.UTF8
+    let printInductionSchema leftSide rightSide =
+        if aloud then printfn "Соединение левой и правой части:"
+        if aloud then printfn $"{leftSide} =\n\t{rightSide}\n"
 
-    let generalizedPattern, vars2vars = Pattern.generalizeVariables pattern
-    let instantiator = linearInstantiator generalizedPattern
-    let A = pattern2a generalizedPattern
-    let B = pattern2b generalizedPattern
-    printQuery aloud pattern vars2vars A B
-    let A, B = printInstance aloud instantiator A B
-    let invariantA = printFinal aloud A B
-    let leftSide, rightSide = printInduction aloud B invariantA
-    let ok = printInductionSchema aloud leftSide rightSide
-    Assert.IsTrue(ok)
+        // {b1, .., bk} \subseteq {a1, .., al} <=> (b1 = a1 /\ ... /\ b1 = al) \/ ... \/ (bk = a1 /\ ... /\ bk = al)
+        let callsLeft = State.collectAutomatonApplies leftSide
+        let callsRight = Invariant.collectAutomatonApplies rightSide
+        let callsDiff = Set.difference callsRight callsLeft
+        if Set.isEmpty callsDiff then
+            let abstrLeftSide, (_, state2vars) = State.abstractAutomatonApplies leftSide
+            let abstrRightSide =
+                let mapper name pat =
+                    let a = AutomatonApply(name, pat)
+                    match Map.tryFind a state2vars with
+                    | Some ident -> SVar ident
+                    | None -> a
+                Invariant.mapAutomatonApplies mapper rightSide
+            if aloud then printfn "Итоговая индукционная схема:"
+            if aloud then printfn $"{abstrLeftSide} =\n\t{abstrRightSide}"
+            true
+        else
+            if aloud then printfn "Что из правой части не хватает в левой:"
+            if aloud then printfn $"""Количество: {Set.count callsDiff}, Состояния: {callsDiff |> Seq.map toString |> join ", "}."""
+            false
 
-let testSilent = testPattern false
-let testAloud = testPattern true
+    let printInduction strategy B invariantA =
+        let freeVars = State.freeVars B |> Set.toList
+        let instantiator=
+            freeVars
+            |> List.map (fun ident -> ident, Term.mkFullTree width 1)
+            |> Map.ofList
+        if aloud then printfn "Индукционная раскрутка слева:"
+        let B' = State.instantiate instantiator B
+        if aloud then printfn $"{B'} ="
+        let B'' = State.unfoldAutomatonApplyOnce strategy B'
+        if aloud then printfn $"\t{B''} ="
+        let sideB = Invariant.rewrite B'' (B, invariantA)
+        if aloud then printfn $"\t{sideB}"
+        if aloud then printfn ""
+
+        let invariantA' = Invariant.instantiate instantiator invariantA
+        let invariantA'' = Invariant.unfoldAutomatonApplyRec strategy invariantA'
+        if aloud then printfn "Индукционная раскрутка справа:"
+        if aloud then printfn $"{invariantA'} ="
+        if aloud then printfn $"\t{invariantA''}"
+        if aloud then printfn ""
+
+        sideB, invariantA''
+
+    new (aloud, patterns) = DeltaGenerator(aloud, patterns, 0)
+    new (aloud, pattern) = DeltaGenerator(aloud, [pattern])
+
+    member x.StrategyBuilder = strategyBuilder
+
+    member x.CheckAloud () =
+        setAloud true
+        x.Check()
+
+    member x.Check () =
+        let strategy = strategyBuilder.Build()
+        seq {
+            for pattern, generalizedPattern, vars2vars, instantiator in initialMetadata do
+                let A = pattern2a generalizedPattern
+                let B = pattern2b generalizedPattern
+                printQuery pattern vars2vars A B
+                let A, B = printInstance strategy instantiator A B
+                let invariantA = printFinal A B
+                let leftSide, rightSide = printInduction strategy B invariantA
+                let ok = printInductionSchema leftSide rightSide
+                yield ok
+        } |> Seq.forall id
 
 let var n = Var (IdentGenerator.gensymp n)
-let a, x, y = var "a", var "x", var "y"
-let L = Apply(IdentGenerator.gensymp "L", [])
-let binaryConstructor c = let c = IdentGenerator.gensymp c in fun (x, y) -> Apply(c, [x; y])
-let N = binaryConstructor "N"
+let zeroaryConstructor c = let c = IdentGenerator.gensymp c in Apply(c, [])
 let unaryConstructor c = let c = IdentGenerator.gensymp c in fun x -> Apply(c, [x])
+let binaryConstructor c = let c = IdentGenerator.gensymp c in fun (x, y) -> Apply(c, [x; y])
+
+let a, x, y, z, b = var "a", var "x", var "y", var "z", var "b"
+let L = zeroaryConstructor "L"
+let N = binaryConstructor "N"
 let S = unaryConstructor "S"
+let nil = zeroaryConstructor "nil"
+let cons = binaryConstructor "cons"
+
+let testAloud (pattern : term list) = Assert.IsTrue <| DeltaGenerator(true, pattern).Check()
+let testSilent (pattern : term list) = Assert.IsTrue <| DeltaGenerator(false, pattern).Check()
 
 [<SetUp>]
 let initTest () =
@@ -159,6 +197,32 @@ let Test7 () =
 [<Test>]
 let Test8 () =
     testAloud [a; N(x, N(x, x))]
+
+[<Test>]
+let Test9 () =
+    testAloud [N(x, y); z]
+
+// \phi -> invariant -> full conv. automaton -> closed modulo **all possible** patterns
+// \phi -> invariant -> some conv. automaton -> closed modulo patterns of \phi?
+// 
+[<Test>]
+let Test10 () =
+    testAloud [x; N(N(L, L), N(L, L))]
+
+[<Test>]
+let TestMultiplePatternsSchemaCover () =
+    let patterns = [
+        [nil; cons(x, y)]
+        [cons(x, y); cons(a, b)]
+        [x; y]
+    ]
+    let g = DeltaGenerator(false, patterns, 2)
+    while g.StrategyBuilder.IsReducible() do
+        if g.Check() then
+            g.StrategyBuilder.ImproveCurrentStrategy()
+        else
+            g.StrategyBuilder.BacktrackStrategy()
+    Assert.IsTrue(g.CheckAloud())
 
 type patternSetup = {termWidth: int; termHeight: int; varNumber: int; constrNumber: int; termsInPattern: int}
 type testSetup = {patternSetup: patternSetup; runTimes: int}

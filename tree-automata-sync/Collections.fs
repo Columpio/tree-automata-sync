@@ -1,5 +1,11 @@
 ﻿[<AutoOpen>]
 module tree_automata_sync.Collections
+open System
+
+let inline __notImplemented__() = failwith "Not implemented!"
+let inline __unreachable__() = failwith "Unreachable!"
+let inline toString x = x.ToString()
+let inline join (s : string) (ss : string seq) = String.Join(s, ss)
 
 module Map =
     let findOrDefault map x = Map.tryFind x map |> Option.defaultValue x
@@ -35,12 +41,22 @@ module List =
 
     let instantiate map = List.map (Map.findOrDefault map)
 
+    let zipMany xss =
+        let rec product xss k =
+            match xss with
+            | [] -> k [[]]
+            | [xs] -> xs |> List.map List.singleton |> k
+            | xs::xss ->
+                product xss (fun yss -> List.map2 (fun x ys -> x :: ys) xs yss |> k)
+        product xss id
+
     let pairwiseProduct xss =
         let rec product xss k =
             match xss with
             | [] -> k [[]]
             | xs::xss ->
                 product xss (fun yss -> xs |> List.collect (fun x -> List.map (fun ys -> x :: ys) yss) |> k)
+//        printfn $"""Product of {List.length xss}: {xss |> List.map (List.length >> toString) |> join ", "}"""
         product xss id
 
 module Counter =
