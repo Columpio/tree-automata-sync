@@ -34,7 +34,6 @@ type StrategyBuilder(width, vars) =
         List.map (List.choose (fun (i, j) -> if i < totalSize then Some(xss.[i].[j]) else None)) strategy
 
     member x.Build() =
-        printf $"Trying {droppedElementPointer}"
         let strategy =
             Seq.map2 (fun strategyLine maskLine -> Seq.zip strategyLine maskLine |> Seq.choose (fun (e, b) -> if b then Some e else None) |> List.ofSeq) fullConvolution mask
             |> List.ofSeq
@@ -45,6 +44,7 @@ type StrategyBuilder(width, vars) =
     member x.ImproveCurrentStrategy() =
         droppedElementPointer.Increment()
         droppedElementPointer.SetAtCurrent(mask, false)
+        printf $"Trying to drop {droppedElementPointer}"
 
     member x.BacktrackStrategy() =
         droppedElementPointer.SetAtCurrent(mask, true)

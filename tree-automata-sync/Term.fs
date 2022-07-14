@@ -1,5 +1,10 @@
 ﻿[<AutoOpen>]
 module tree_automata_sync.Term
+open System
+
+module Op =
+    let makeConstructorConstant (op : string) = op.ToUpper()
+    let isConstructorFree (op : string) = op.Chars(0) |> Char.IsLower //TODO
 
 module Term =
     let foldWithDepth z fIdent fOpname =
@@ -35,6 +40,8 @@ module Term =
 
     let freeVars = fold Set.add (fun _ -> id) Set.empty
     let freeVarsMap = fold Counter.add (fun _ -> id) Counter.empty
+
+    let makeConstructorsConstant = map Var Op.makeConstructorConstant
 
     let Bottom = Apply("Bot", [])
 
@@ -81,6 +88,8 @@ module TermList =
             Var ident', Map.add ident' ident map
         List.mapFold (Term.mapFold generalizeVar (fun op map -> op, map)) Map.empty ts
 
+    let makeConstructorsConstant ts = List.map Term.makeConstructorsConstant ts
+
     let instantiate instantiator = List.map (Term.instantiate instantiator)
     
     let rewrite substConstrs instantiator = List.map (Term.rewrite substConstrs instantiator)
@@ -93,7 +102,9 @@ module Pattern =
     let generalizeVariables (Pattern pat) =
         let pat', vars2vars = TermList.generalizeVariables pat
         Pattern pat', vars2vars
-    
+
+    let makeConstructorsConstant (Pattern pat) = TermList.makeConstructorsConstant pat |> Pattern
+
     let matchPattern (Pattern termsPat) (Pattern termsInst) =
         let rec matchWith ((constrMap, varMap) as maps) (termPat, termInst) k =
             match termPat with

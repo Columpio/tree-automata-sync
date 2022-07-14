@@ -24,6 +24,7 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
     do setAloud aloud
     let width, strategyBuilder, initialMetadata =
         let patterns = List.map Pattern patterns
+        let patterns = List.map Pattern.makeConstructorsConstant patterns
         let widthsAndCounts, initialMetadata =
             patterns |> List.map (fun pattern ->
                 let generalizedPattern, vars2vars = Pattern.generalizeVariables pattern
@@ -209,13 +210,7 @@ let Test9 () =
 let Test10 () =
     testAloud [x; N(N(L, L), N(L, L))]
 
-[<Test>]
-let TestMultiplePatternsSchemaCover () =
-    let patterns = [
-        [nil; cons(x, y)]
-        [cons(x, y); cons(a, b)]
-        [x; y]
-    ]
+let TestMultiplePatternsSchemaCover patterns =
     let g = DeltaGenerator(false, patterns, 2)
     let mutable ok = true
     while ok do
@@ -229,6 +224,22 @@ let TestMultiplePatternsSchemaCover () =
             ok <- false
     IdentGenerator.reset()
     Assert.IsTrue(g.CheckAloud())
+
+[<Test>]
+let TestMultiplePatternsSchemaCover1 () =
+    let patterns = [
+        [nil; cons(x, y)]
+        [cons(x, y); cons(a, b)]
+        [x; y]
+    ]
+    TestMultiplePatternsSchemaCover patterns
+
+[<Test>]
+let TestMultiplePatternsSchemaCover2 () =
+    let patterns = [
+        [x; y]
+    ]
+    TestMultiplePatternsSchemaCover patterns
 
 type patternSetup = {termWidth: int; termHeight: int; varNumber: int; constrNumber: int; termsInPattern: int}
 type testSetup = {patternSetup: patternSetup; runTimes: int}

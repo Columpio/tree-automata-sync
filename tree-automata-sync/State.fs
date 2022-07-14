@@ -1,5 +1,4 @@
 ﻿module tree_automata_sync.State
-open System
 
 let mapAutomatonApplies f =
     let rec mapPattern = function
@@ -29,13 +28,11 @@ let mapFoldAutomatonApplies f =
             CombinedState(heads, states), z
     mapFold
 
-let private isConstructorFree (op : string) = op.Chars(0) |> Char.IsLower //TODO
-
 let freeConstructors =
     let rec freeConstructors free state =
         match state with
         | DeltaApply(_, constrs, states) ->
-            List.fold freeConstructors (constrs |> List.filter isConstructorFree |> Set.ofList |> Set.union free) states
+            List.fold freeConstructors (constrs |> List.filter Op.isConstructorFree |> Set.ofList |> Set.union free) states
         | _ -> free
     freeConstructors Set.empty >> Set.toList
 
