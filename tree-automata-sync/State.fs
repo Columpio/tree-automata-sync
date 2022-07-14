@@ -8,9 +8,9 @@ let mapAutomatonApplies f =
         | CombinedState(constrs, states) -> CombinedState(constrs, List.map mapPattern states)
     mapPattern
 
-let foldAutomatonApplies f =
+let foldAutomatonApplies fIdent f =
     let rec fold z = function
-        | SVar _ -> z
+        | SVar i -> fIdent z i
         | AutomatonApply(name, pattern) -> f z name pattern
         | CombinedState(_, states)
         | DeltaApply(_, _, states) -> List.fold fold z states
@@ -63,7 +63,7 @@ let unfoldAutomatonApplyRec strategy =
     let rec iter state = unfoldAutomatonApplyGeneric strategy iter state
     iter
 
-let freeVars = foldAutomatonApplies (fun free _ -> Pattern.freeVars >> Set.union free) Set.empty
+let freeVars = foldAutomatonApplies (fun free i -> Set.add i free) (fun free _ -> Pattern.freeVars >> Set.union free) Set.empty
 
 let abstractAutomatonApplies =
     let nameFromPattern (Pattern pat) =
@@ -80,6 +80,13 @@ let abstractAutomatonApplies =
             SVar freshName, (Map.add freshName a vars2states, Map.add a freshName states2vars)
     mapFoldAutomatonApplies helper (Map.empty, Map.empty)
 
-let collectAutomatonApplies = foldAutomatonApplies (fun states name pat -> Set.add (AutomatonApply(name, pat)) states) Set.empty
+let collectAutomatonApplies = foldAutomatonApplies (fun z _ -> z) (fun states name pat -> Set.add (AutomatonApply(name, pat)) states) Set.empty
 
-let maxFunctionArity = foldAutomatonApplies (fun mx _ pat -> max mx (Pattern.maxFunctionArity pat)) 0
+let maxFunctionArity = foldAutomatonApplies (fun z _ -> z) (fun mx _ pat -> max mx (Pattern.maxFunctionArity pat)) 0
+
+let isVarSubset left right =
+    // left \subseteq right <=> left \ right = \emptyset
+    let callsLeft = freeVars left
+    let callsRight = freeVars right
+    let callsDiff = Set.difference callsLeft callsRight
+    Set.isEmpty callsDiff

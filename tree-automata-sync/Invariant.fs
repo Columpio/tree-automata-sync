@@ -35,3 +35,10 @@ let rewrite state (rewriteFromState, Invariant(rewriteToConstrs, rewriteToStates
 let collectAutomatonApplies (Invariant(_, states)) = states |> List.map State.collectAutomatonApplies |> Set.unionMany
 
 let maxFunctionArity (Invariant(_, states)) = states |> List.map State.maxFunctionArity |> List.max
+
+let difference inv state =
+    // {b1, .., bk} \subseteq {a1, .., al} <=> (b1 = a1 /\ ... /\ b1 = al) \/ ... \/ (bk = a1 /\ ... /\ bk = al)
+    let callsLeft = State.collectAutomatonApplies state
+    let callsRight = collectAutomatonApplies inv
+    let callsDiff = Set.difference callsRight callsLeft
+    callsDiff

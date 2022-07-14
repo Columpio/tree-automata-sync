@@ -97,6 +97,8 @@ module TermList =
     let cutHeads = List.mapChoose Term.cut >> Option.map List.unzip
 
 module Pattern =
+    let length (Pattern pat) = List.length pat
+    let isEmpty (Pattern pat) = List.isEmpty pat
     let freeVars (Pattern pat) = TermList.freeVars pat
     let freeVarsMap (Pattern pat) = TermList.freeVarsMap pat
     let generalizeVariables (Pattern pat) =

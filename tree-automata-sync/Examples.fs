@@ -27,10 +27,11 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
         let patterns = List.map Pattern.makeConstructorsConstant patterns
         let widthsAndCounts, initialMetadata =
             patterns |> List.map (fun pattern ->
+                let automatonASize = Pattern.length pattern
                 let generalizedPattern, vars2vars = Pattern.generalizeVariables pattern
                 let variablesCount = Map.keys vars2vars |> Seq.length
                 let width, instantiator = linearInstantiator generalizedPattern
-                (width, variablesCount), (pattern, generalizedPattern, vars2vars, instantiator)) |> List.unzip
+                (width, max automatonASize variablesCount), (pattern, generalizedPattern, vars2vars, instantiator)) |> List.unzip
 
         let width = fst <| List.maxBy fst widthsAndCounts
         let variablesCount = snd <| List.maxBy snd widthsAndCounts
@@ -80,10 +81,7 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
         if aloud then printfn "Соединение левой и правой части:"
         if aloud then printfn $"{leftSide} =\n\t{rightSide}\n"
 
-        // {b1, .., bk} \subseteq {a1, .., al} <=> (b1 = a1 /\ ... /\ b1 = al) \/ ... \/ (bk = a1 /\ ... /\ bk = al)
-        let callsLeft = State.collectAutomatonApplies leftSide
-        let callsRight = Invariant.collectAutomatonApplies rightSide
-        let callsDiff = Set.difference callsRight callsLeft
+        let callsDiff = Invariant.difference rightSide leftSide
         if Set.isEmpty callsDiff then
             let abstrLeftSide, (_, state2vars) = State.abstractAutomatonApplies leftSide
             let abstrRightSide =
@@ -101,12 +99,14 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
             if aloud then printfn $"""Количество: {Set.count callsDiff}, Состояния: {callsDiff |> Seq.map toString |> join ", "}."""
             false
 
+    let prepareInduction state =
+        let freeVars = State.freeVars state |> Set.toList
+        freeVars
+        |> List.map (fun ident -> ident, Term.mkFullTree width 1)
+        |> Map.ofList
+
     let printInduction strategy B invariantA =
-        let freeVars = State.freeVars B |> Set.toList
-        let instantiator=
-            freeVars
-            |> List.map (fun ident -> ident, Term.mkFullTree width 1)
-            |> Map.ofList
+        let instantiator = prepareInduction B
         if aloud then printfn "Индукционная раскрутка слева:"
         let B' = State.instantiate instantiator B
         if aloud then printfn $"{B'} ="
@@ -125,6 +125,12 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
 
         sideB, invariantA''
 
+    let checkStrategyIsNotEmpty strategy A =
+        let instantiator = prepareInduction A
+        let instA = State.instantiate instantiator A
+        let unfoldedA = State.unfoldAutomatonApplyOnce strategy instA
+        State.isVarSubset instA unfoldedA
+
     new (aloud, patterns) = DeltaGenerator(aloud, patterns, 0)
     new (aloud, pattern) = DeltaGenerator(aloud, [pattern])
 
@@ -139,6 +145,7 @@ type DeltaGenerator(aloud, patterns, constructor_max_width) =
         seq {
             for pattern, generalizedPattern, vars2vars, instantiator in initialMetadata do
                 let A = pattern2a generalizedPattern
+                yield checkStrategyIsNotEmpty strategy A
                 let B = pattern2b generalizedPattern
                 printQuery pattern vars2vars A B
                 let A, B = printInstance strategy instantiator A B
@@ -238,6 +245,20 @@ let TestMultiplePatternsSchemaCover1 () =
 let TestMultiplePatternsSchemaCover2 () =
     let patterns = [
         [x; y]
+    ]
+    TestMultiplePatternsSchemaCover patterns
+
+[<Test>]
+let TestMultiplePatternsSchemaCover3 () =
+    let patterns = [
+        [cons(x, y); cons(a, b)]
+    ]
+    TestMultiplePatternsSchemaCover patterns
+
+[<Test>]
+let TestMultiplePatternsSchemaCover4 () =
+    let patterns = [
+        [x; x]
     ]
     TestMultiplePatternsSchemaCover patterns
 
