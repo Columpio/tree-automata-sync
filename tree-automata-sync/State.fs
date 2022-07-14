@@ -52,7 +52,7 @@ let unfoldAutomatonApplyGeneric strategy mapChild =
         match Pattern.cutHeads pattern with
         | Some(heads, bodies) ->
             let bodies = bottomize bodies
-            let states = strategy bodies |> List.map (fun pat -> AutomatonApply(name, Pattern pat))
+            let states = strategy bodies |> List.choose (fun pat -> if pat = [] then None else Some <| AutomatonApply(name, Pattern pat))
             let states = List.map mapChild states
             DeltaApply(name, heads, states)
         | None -> AutomatonApply(name, pattern)
